@@ -50,7 +50,7 @@ private:
 
 public:
 	Any() : mpProxy(NULL) { }
-	~Any() { delete mpProxy; }
+	//~Any() { delete mpProxy; }
 
 public:
 	Any(const Any &other): mpProxy(other.mpProxy ? other.mpProxy->clone() : 0) { }
