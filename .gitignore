@@ -1,0 +1,6 @@
+/physx/compiler/vc16win64
+/physx/bin/win.x86_64.vc142.mt/debug
+/physx/bin/win.x86_64.vc142.mt/checked
+/physx/bin/win.x86_64.vc142.mt/profile
+/physx/bin/win.x86_64.vc142.mt/release
+/physx/include/PxConfig.h
