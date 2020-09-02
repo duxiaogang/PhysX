@@ -148,8 +148,8 @@ bool loadMesh(const char* file)
 		{
 			float x, y, z;
 			inFile >> x >> y >> z;
-			x -= 5000.0f;
-			z -= 5000.0f;
+			//x -= 5000.0f;
+			//z -= 5000.0f;
 			vertVec.emplace_back(x, y, z);
 
 			if (x < minX) minX = x;
@@ -186,10 +186,15 @@ bool loadMesh(const char* file)
 	return true;
 }
 
-//bool loadMeshs(const char *dir)
-//{
-//	return false;
-//}
+void loadMeshs(const char *dir)
+{
+	char path[4096];
+	for (int i = 1; i < 10000; i++)
+	{
+		snprintf(path, sizeof(path) - 1, "%s\\%d.obj", dir, i);
+		if (!loadMesh(path)) break;
+	}
+}
 
 void initPhysics()
 {
@@ -371,6 +376,7 @@ int snippetMain(int, const char*const*)
 	initPhysics();
 
 	loadMesh("d:\\test.obj");
+	//loadMeshs("d:\\objs");
 
 	for(PxU32 i=0; i<frameCount; i++)
 		stepPhysics();
