@@ -34,6 +34,7 @@
 // and shows how these settings affect the triangle mesh creation speed.
 // ****************************************************************************
 
+#if 0
 #include <ctype.h>
 
 #include "PxPhysicsAPI.h"
@@ -392,3 +393,4 @@ int snippetMain(int, const char*const*)
 
 	return 0;
 }
+#endif
