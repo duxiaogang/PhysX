@@ -3,9 +3,11 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <math.h>
 
 #include "PxPhysicsAPI.h"
 #include "../snippetutils/SnippetUtils.h"
+#include "svpng.h"
 
 using namespace std;
 using namespace physx;
@@ -241,6 +243,36 @@ void cleanupPhysics()
 	if (gFoundation) gFoundation->release();
 }
 
+void bake2png(int width, int height, const PxVec3 *data)
+{
+	unsigned char* rgb = new unsigned char[width * height * 3];
+	unsigned char* p = rgb;
+    int x, z;
+    FILE *fp = fopen("d:\\rgb.png", "wb");
+	for (z = 0; z < height; z++)
+	{
+		for (x = 0; x < width; x++) {
+			const PxVec3& v = data[z * width + x];
+			float m = v.magnitude();
+			m = pow(pow(m, 1.0f / 3) / 10.0f, 1.0f / 3);
+			if (m < 0.001f)
+			{
+				m = 0.001f;
+			}
+			else if (m > 0.999f)
+			{
+				m = 0.999f;
+			}
+			*p++ = (unsigned char)(256 * m); //R
+			*p++ = 0; //G
+			*p++ = 0; //B
+		}
+	}
+    svpng(fp, width, height, rgb, 0);
+    fclose(fp);
+	delete[] rgb;
+}
+
 void bake()
 {
 #if 1
@@ -249,8 +281,8 @@ void bake()
 	//std::cout << minZ << endl;
 	//std::cout << maxZ << endl;
 
-	const int texWidth = 256;
-	const int texHeight = 256;
+	const int texWidth = 2048;
+	const int texHeight = 2048;
 	const float coreRange = 0.3f;
 	const float softRange = 1.0f;
 	const float forceMax = 1000.0f;
@@ -321,6 +353,10 @@ void bake()
 			printf("%d %d %0.2f %0.2f\n", x, z, forceFields[i].x, forceFields[i].z);
 		}
 	}
+
+	bake2png(texWidth, texHeight, forceFields);
+
+	delete forceFields;
 
 	PxU64 stopTime = SnippetUtils::getCurrentTimeCounterValue();
 	float elapsedTime = SnippetUtils::getElapsedTimeInMilliseconds(stopTime - startTime);
