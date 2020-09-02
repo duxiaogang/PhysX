@@ -5,6 +5,7 @@
 #include <fstream>
 
 #include "PxPhysicsAPI.h"
+#include "../snippetutils/SnippetUtils.h"
 
 using namespace std;
 using namespace physx;
@@ -22,6 +23,11 @@ PxScene*				gScene		= NULL;
 PxMaterial*				gMaterial	= NULL;
 
 PxPvd*                  gPvd        = NULL;
+
+float					minX = 1000000.0f;
+float					maxX = -1000000.0f;
+float					minZ = 1000000.0f;
+float					maxZ = -1000000.0f;
 
 // Setup common cooking params
 void setupCommonCookingParams(PxCookingParams& params, bool skipMeshCleanup, bool skipEdgeData)
@@ -138,11 +144,16 @@ bool loadMesh(const char* file)
 		if (inFile.eof()) break;
 		if (strcmp(type, "v") == 0 || strcmp(type, "V") == 0)
 		{
-			float v1, v2, v3;
-			inFile >> v1 >> v2 >> v3;
-			v1 -= 5000.0f;
-			v3 -= 5000.0f;
-			vertVec.emplace_back(v1, v2, v3);
+			float x, y, z;
+			inFile >> x >> y >> z;
+			x -= 5000.0f;
+			z -= 5000.0f;
+			vertVec.emplace_back(x, y, z);
+
+			if (x < minX) minX = x;
+			if (x > maxX) maxX = x;
+			if (z < minZ) minZ = z;
+			if (z > maxZ) maxZ = z;
 		}
 		else if (strcmp(type, "f") == 0 || strcmp(type, "F") == 0)
 		{
@@ -230,6 +241,94 @@ void cleanupPhysics()
 	if (gFoundation) gFoundation->release();
 }
 
+void bake()
+{
+#if 1
+	//std::cout << minX << endl;
+	//std::cout << maxX << endl;
+	//std::cout << minZ << endl;
+	//std::cout << maxZ << endl;
+
+	const int texWidth = 256;
+	const int texHeight = 256;
+	const float coreRange = 0.3f;
+	const float softRange = 1.0f;
+	const float forceMax = 1000.0f;
+
+	PxVec3* forceFields = new PxVec3[texWidth * texHeight];
+	for (int i = 0; i < texWidth * texHeight; i++)
+	{
+		forceFields[i] = PxVec3(0.0f);
+	}
+
+	PxU64 startTime = SnippetUtils::getCurrentTimeCounterValue();
+
+	float xStep = (maxX - minX + 2.0f) / texWidth;
+	float zStep = (maxZ - minZ + 2.0f) / texHeight;
+	float xBegin = minX - 1.0f;
+	float zBegin = minZ - 1.0f;
+	for (int x = 0; x < texWidth; x++)
+	{
+		for (int z = 0; z < texHeight; z++)
+		{
+			PxVec3 from(xBegin + x * xStep, 2.0f, zBegin + z * zStep);
+			PxOverlapBuffer hit;
+			if (gScene->overlap(PxSphereGeometry(1.0f), PxTransform(from), hit, PxQueryFilterData(PxQueryFlag::eANY_HIT | PxQueryFlag::eSTATIC)))
+			{
+				PxVec3 force(0.0f);
+				for (int i = 0; i < 36; i++)
+				{
+					PxQuat qStep(i * 10.0f / 180.0f * 3.14159f, PxVec3(0, 1, 0));
+					PxVec3 dir(0, 0, 1);
+					dir = qStep.rotate(dir);
+					PxRaycastBuffer hit2;
+					if (gScene->raycast(from, dir, 1.1f, hit2))
+					{
+						if (!hit2.hasBlock) throw 1; //FIXME:
+						PxVec3 f = from;
+						f -= hit2.block.position;
+						float m = f.normalize();
+						m = (m - coreRange) / (softRange - coreRange);
+						if (m < 0.001f)
+						{
+							m = 0.001f;
+						}
+						else if (m > 0.999f)
+						{
+							m = 0.999f;
+						}
+						float factor = 1 / m - 1;
+						force += f * factor;
+					}
+				}
+				float mag = force.normalize();
+				if (mag > 0.001f)
+				{
+					if (mag > forceMax) mag = forceMax;
+				}
+				forceFields[z * texWidth + x] = force * mag;
+			}
+		}
+	}
+
+	printf("%d %d\n", texWidth, texHeight);
+	for (int i = 0; i < texWidth * texHeight; i++)
+	{
+		if (forceFields[i].magnitudeSquared() > 0.001f)
+		{
+			int x = i % texWidth;
+			int z = i / texWidth;
+			printf("%d %d %0.2f %0.2f\n", x, z, forceFields[i].x, forceFields[i].z);
+		}
+	}
+
+	PxU64 stopTime = SnippetUtils::getCurrentTimeCounterValue();
+	float elapsedTime = SnippetUtils::getElapsedTimeInMilliseconds(stopTime - startTime);
+	printf("#Elapsed time in ms: %f \n", double(elapsedTime));
+	elapsedTime = 0;
+#endif
+}
+
 int snippetMain(int, const char*const*)
 {	
 	static const PxU32 frameCount = 100;
@@ -239,6 +338,12 @@ int snippetMain(int, const char*const*)
 
 	for(PxU32 i=0; i<frameCount; i++)
 		stepPhysics();
+
+	bake();
+
+	for(PxU32 i=0; i<frameCount; i++)
+		stepPhysics();
+
 	cleanupPhysics();
 	return 0;
 }
