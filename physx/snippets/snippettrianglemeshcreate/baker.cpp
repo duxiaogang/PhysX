@@ -254,6 +254,48 @@ void cleanupPhysics()
 
 void bake2png(int width, int height, const PxVec3 *data)
 {
+#if 1
+	const int blockWidth = 2048;
+	const int blockHeight = 2048;
+
+	if ((width % blockWidth) != 0) return;
+	if ((height % blockHeight) != 0) return;
+
+	unsigned char* rgb = new unsigned char[blockWidth * blockHeight * 3];
+	for (int w = 0; w < width / blockWidth; w++)
+	{
+		for (int h = 0; h < height / blockHeight; h++)
+		{
+			unsigned char* p = rgb;
+			int x, z;
+			char path[1024];
+			snprintf(path, sizeof(path)-1, "d:\\ForceFields\\%02d_%02d.png", w, h);
+			FILE* fp = fopen(path, "wb");
+			for (z = 0; z < blockHeight; z++)
+			{
+				for (x = 0; x < blockWidth; x++) {
+					const PxVec3& v = data[(h * blockHeight + z) * width + (w * blockWidth + x)];
+					float m = v.magnitude();
+					m = pow(pow(m, 1.0f / 3) / 10.0f, 1.0f / 3);
+					if (m < 0.001f)
+					{
+						m = 0.001f;
+					}
+					else if (m > 0.999f)
+					{
+						m = 0.999f;
+					}
+					*p++ = (unsigned char)(256 * m); //R
+					*p++ = 0; //G
+					*p++ = 0; //B
+				}
+			}
+			svpng(fp, blockWidth, blockHeight, rgb, 0);
+			fclose(fp);
+		}
+	}
+	delete[] rgb;
+#else
 	unsigned char* rgb = new unsigned char[width * height * 3];
 	unsigned char* p = rgb;
     int x, z;
@@ -280,6 +322,7 @@ void bake2png(int width, int height, const PxVec3 *data)
     svpng(fp, width, height, rgb, 0);
     fclose(fp);
 	delete[] rgb;
+#endif
 }
 
 void bake(const char *file)
@@ -330,6 +373,7 @@ void bake(const char *file)
 						for (int z = zMin; z < texHeight && z < zMax; z++)
 						{
 							PxVec3 from(xBegin + x * xStep, 2.0f, zBegin + z * zStep);
+#if 1
 							PxOverlapBuffer hit;
 							if (gScene->overlap(PxSphereGeometry(1.0f), PxTransform(from), hit, PxQueryFilterData(PxQueryFlag::eANY_HIT | PxQueryFlag::eSTATIC)))
 							{
@@ -366,6 +410,9 @@ void bake(const char *file)
 								}
 								forceFields[z * texWidth + x] = force * mag; //FIXME: 多线程cache问题？
 							}
+#else
+							forceFields[z * texWidth + x] = from;
+#endif
 						}
 					}
 				}
@@ -382,6 +429,7 @@ void bake(const char *file)
 		for (int z = 0; z < texHeight; z++)
 		{
 			PxVec3 from(xBegin + x * xStep, 2.0f, zBegin + z * zStep);
+#if 1
 			PxOverlapBuffer hit;
 			if (gScene->overlap(PxSphereGeometry(1.0f), PxTransform(from), hit, PxQueryFilterData(PxQueryFlag::eANY_HIT | PxQueryFlag::eSTATIC)))
 			{
@@ -418,6 +466,9 @@ void bake(const char *file)
 				}
 				forceFields[z * texWidth + x] = force * mag;
 			}
+#else
+			forceFields[z * texWidth + x] = from;
+#endif
 		}
 	}
 #endif
@@ -463,7 +514,7 @@ int snippetMain(int, const char*const*)
 	for(PxU32 i=0; i<frameCount; i++)
 		stepPhysics();
 
-	bake("d:\\forcefields.txt");
+	bake("d:\\ForceFields\\forcefields.txt");
 
 	for(PxU32 i=0; i<frameCount; i++)
 		stepPhysics();
