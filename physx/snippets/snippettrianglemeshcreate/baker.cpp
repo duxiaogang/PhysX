@@ -4,6 +4,8 @@
 #include <iostream>
 #include <fstream>
 #include <math.h>
+#include <thread>
+#include <cstdio>
 
 #include "PxPhysicsAPI.h"
 #include "../snippetutils/SnippetUtils.h"
@@ -209,7 +211,9 @@ void initPhysics()
 
 	PxSceneDesc sceneDesc(gPhysics->getTolerancesScale());
 	sceneDesc.gravity = PxVec3(0.0f, -9.81f, 0.0f);
-	gDispatcher = PxDefaultCpuDispatcherCreate(2);
+	//gDispatcher = PxDefaultCpuDispatcherCreate(2);
+	PxU32 numCores = SnippetUtils::getNbPhysicalCores();
+	gDispatcher = PxDefaultCpuDispatcherCreate(numCores == 0 ? 0 : numCores - 1);
 	sceneDesc.cpuDispatcher = gDispatcher;
 	sceneDesc.filterShader = PxDefaultSimulationFilterShader;
 	gScene = gPhysics->createScene(sceneDesc);
@@ -278,16 +282,17 @@ void bake2png(int width, int height, const PxVec3 *data)
 	delete[] rgb;
 }
 
-void bake()
+void bake(const char *file)
 {
-#if 1
 	//std::cout << minX << endl;
 	//std::cout << maxX << endl;
 	//std::cout << minZ << endl;
 	//std::cout << maxZ << endl;
 
-	const int texWidth = 2048;
-	const int texHeight = 2048;
+	const int texWidth = 4096*8;
+	const int texHeight = 4096*8;
+	const int blockWidth = 1024;
+	const int blockHeight = 1024;
 	const float coreRange = 0.3f;
 	const float softRange = 1.0f;
 	const float forceMax = 1000.0f;
@@ -300,10 +305,78 @@ void bake()
 
 	PxU64 startTime = SnippetUtils::getCurrentTimeCounterValue();
 
-	float xStep = (maxX - minX + 2.0f) / texWidth;
-	float zStep = (maxZ - minZ + 2.0f) / texHeight;
-	float xBegin = minX - 1.0f;
-	float zBegin = minZ - 1.0f;
+	const float xStep = (maxX - minX + 2.0f) / texWidth;
+	const float zStep = (maxZ - minZ + 2.0f) / texHeight;
+	const float xBegin = minX - 1.0f;
+	const float zBegin = minZ - 1.0f;
+
+#if 1
+	const int threadCount = 16;
+	std::thread t[threadCount];
+	int count[threadCount];
+	for (int ti = 0; ti < threadCount; ti++)
+	{
+		t[ti] = std::thread([=, &count] {
+			int blockIndex = 0;
+			count[ti] = 0;
+			for (int xMin = 0, xMax = blockWidth; xMin < texWidth; xMin += blockWidth, xMax += blockWidth)
+			{
+				for (int zMin = 0, zMax = blockHeight; zMin < texHeight; zMin += blockHeight, zMax += blockHeight)
+				{
+					if ((blockIndex++ % threadCount) != ti) continue;
+					count[ti]++;
+					for (int x = xMin; x < texWidth && x < xMax; x++)
+					{
+						for (int z = zMin; z < texHeight && z < zMax; z++)
+						{
+							PxVec3 from(xBegin + x * xStep, 2.0f, zBegin + z * zStep);
+							PxOverlapBuffer hit;
+							if (gScene->overlap(PxSphereGeometry(1.0f), PxTransform(from), hit, PxQueryFilterData(PxQueryFlag::eANY_HIT | PxQueryFlag::eSTATIC)))
+							{
+								PxVec3 force(0.0f);
+								for (int i = 0; i < 36; i++)
+								{
+									PxQuat qStep(i * 10.0f / 180.0f * 3.14159f, PxVec3(0, 1, 0));
+									PxVec3 dir(0, 0, 1);
+									dir = qStep.rotate(dir);
+									PxRaycastBuffer hit2;
+									if (gScene->raycast(from, dir, 1.1f, hit2))
+									{
+										if (!hit2.hasBlock) throw 1; //FIXME:
+										PxVec3 f = from;
+										f -= hit2.block.position;
+										float m = f.normalize();
+										m = (m - coreRange) / (softRange - coreRange);
+										if (m < 0.001f)
+										{
+											m = 0.001f;
+										}
+										else if (m > 0.999f)
+										{
+											m = 0.999f;
+										}
+										float factor = 1 / m - 1;
+										force += f * factor;
+									}
+								}
+								float mag = force.normalize();
+								if (mag > 0.001f)
+								{
+									if (mag > forceMax) mag = forceMax;
+								}
+								forceFields[z * texWidth + x] = force * mag; //FIXME: 多线程cache问题？
+							}
+						}
+					}
+				}
+			}
+		});
+	}
+	for (int ti = 0; ti < threadCount; ti++)
+	{
+		t[ti].join();
+	}
+#else
 	for (int x = 0; x < texWidth; x++)
 	{
 		for (int z = 0; z < texHeight; z++)
@@ -347,27 +420,36 @@ void bake()
 			}
 		}
 	}
+#endif
 
-	printf("%d %d\n", texWidth, texHeight);
+	PxU64 stopTime = SnippetUtils::getCurrentTimeCounterValue();
+
+	FILE* fp = fopen(file, "w");
+	if (!fp) return;
+	fprintf(fp, "%d %d\n", texWidth, texHeight);
+#if 0
+	for (int i = 0; i < threadCount; i++)
+	{
+		fprintf(fp, "%d %d\n", i, count[i]);
+	}
+#endif
 	for (int i = 0; i < texWidth * texHeight; i++)
 	{
 		if (forceFields[i].magnitudeSquared() > 0.001f)
 		{
 			int x = i % texWidth;
 			int z = i / texWidth;
-			printf("%d %d %0.2f %0.2f\n", x, z, forceFields[i].x, forceFields[i].z);
+			fprintf(fp, "%d %d %0.2f %0.2f\n", x, z, forceFields[i].x, forceFields[i].z);
 		}
 	}
+	float elapsedTime = SnippetUtils::getElapsedTimeInMilliseconds(stopTime - startTime);
+	fprintf(fp, "#Elapsed time in ms: %f \n", double(elapsedTime));
+	fclose(fp);
 
 	bake2png(texWidth, texHeight, forceFields);
 
 	delete forceFields;
-
-	PxU64 stopTime = SnippetUtils::getCurrentTimeCounterValue();
-	float elapsedTime = SnippetUtils::getElapsedTimeInMilliseconds(stopTime - startTime);
-	printf("#Elapsed time in ms: %f \n", double(elapsedTime));
-	elapsedTime = 0;
-#endif
+	forceFields = nullptr;
 }
 
 int snippetMain(int, const char*const*)
@@ -381,7 +463,7 @@ int snippetMain(int, const char*const*)
 	for(PxU32 i=0; i<frameCount; i++)
 		stepPhysics();
 
-	bake();
+	bake("d:\\forcefields.txt");
 
 	for(PxU32 i=0; i<frameCount; i++)
 		stepPhysics();
