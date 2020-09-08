@@ -477,7 +477,7 @@ void bake(const char *file)
 
 	FILE* fp = fopen(file, "w");
 	if (!fp) return;
-	fprintf(fp, "%d %d\n", texWidth, texHeight);
+	fprintf(fp, "%f %f %f %f %d %d\n", xBegin, xStep, zBegin, zStep, texWidth, texHeight);
 #if 0
 	for (int i = 0; i < threadCount; i++)
 	{
@@ -493,9 +493,10 @@ void bake(const char *file)
 			fprintf(fp, "%d %d %0.2f %0.2f\n", x, z, forceFields[i].x, forceFields[i].z);
 		}
 	}
-	float elapsedTime = SnippetUtils::getElapsedTimeInMilliseconds(stopTime - startTime);
-	fprintf(fp, "#Elapsed time in ms: %f \n", double(elapsedTime));
 	fclose(fp);
+
+	float elapsedTime = SnippetUtils::getElapsedTimeInMilliseconds(stopTime - startTime);
+	printf("#Elapsed time in ms: %f \n", double(elapsedTime));
 
 	bake2png(texWidth, texHeight, forceFields);
 
