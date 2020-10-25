@@ -269,9 +269,10 @@ void bake2png(int width, int height, const PxVec3 *data)
 			unsigned char* p = rgb;
 			int x, z;
 			char path[1024];
-			snprintf(path, sizeof(path)-1, "d:\\ForceFields\\%02d_%02d.png", w, h);
+			snprintf(path, sizeof(path) - 1, "d:\\ForceFields\\%02d_%02d.png", height / blockHeight - 1 - h, w);
 			FILE* fp = fopen(path, "wb");
-			for (z = 0; z < blockHeight; z++)
+			//for (z = 0; z < blockHeight; z++)
+			for (z = blockHeight-1; z >= 0; z--)
 			{
 				for (x = 0; x < blockWidth; x++) {
 					const PxVec3& v = data[(h * blockHeight + z) * width + (w * blockWidth + x)];
@@ -333,7 +334,7 @@ void bake(const char *file)
 	//std::cout << maxZ << endl;
 
 	const int texWidth = 4096*8;
-	const int texHeight = 4096*8;
+	const int texHeight = 2048*8;
 	const int blockWidth = 1024;
 	const int blockHeight = 1024;
 	const float coreRange = 0.3f;
@@ -509,13 +510,17 @@ int snippetMain(int, const char*const*)
 	static const PxU32 frameCount = 100;
 	initPhysics();
 
-	loadMesh("d:\\test.obj");
-	//loadMeshs("d:\\objs");
+	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.test.obj");
+	loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.mainland.obj");
+	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.demo.obj");
 
 	for(PxU32 i=0; i<frameCount; i++)
 		stepPhysics();
 
-	bake("d:\\ForceFields\\forcefields.txt");
+	//bake("d:\\ForceFields\\forcefields.txt");
+	//bake("D:\\Scene_\\Public\\scene\\windows\\forcefields.test.txt");
+	bake("D:\\Scene_\\Public\\scene\\windows\\forcefields.mainland.txt");
+	//bake("D:\\Scene_\\Public\\scene\\windows\\forcefields.demo.txt");
 
 	for(PxU32 i=0; i<frameCount; i++)
 		stepPhysics();
