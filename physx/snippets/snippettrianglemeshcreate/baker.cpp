@@ -6,6 +6,7 @@
 #include <math.h>
 #include <thread>
 #include <cstdio>
+#include <mutex>
 
 #include "PxPhysicsAPI.h"
 #include "../snippetutils/SnippetUtils.h"
@@ -134,7 +135,7 @@ PxTriangleMesh* createBV33TriangleMesh(PxU32 numVertices, const PxVec3* vertices
 	return triMesh;
 }
 
-bool loadMesh(const char* file)
+bool loadMesh(const char* file, int filterIndex)
 {
 	vector<PxVec3> vertVec;
 	vector<PxU32> triVec;
@@ -179,6 +180,10 @@ bool loadMesh(const char* file)
 	if (mesh)
 	{
 		PxShape* shape = gPhysics->createShape(PxTriangleMeshGeometry(mesh), *gMaterial);
+		PxFilterData filterData;
+		filterData.word0 = (1 << filterIndex);
+		//shape->setSimulationFilterData(filterData);
+		shape->setQueryFilterData(filterData);
 		PxRigidStatic* actor = PxCreateStatic(*gPhysics, PxTransform(PxVec3(0, 0, 0)), *shape);
 		gScene->addActor(*actor);
 		shape->release();
@@ -194,7 +199,7 @@ void loadMeshs(const char *dir)
 	for (int i = 1; i < 10000; i++)
 	{
 		snprintf(path, sizeof(path) - 1, "%s\\%d.obj", dir, i);
-		if (!loadMesh(path)) break;
+		if (!loadMesh(path, 0)) break;
 	}
 }
 
@@ -505,13 +510,155 @@ void bake(const char *file)
 	forceFields = nullptr;
 }
 
+std::mutex output_mutex;
+void bake2(const char *file)
+{
+	//const int texWidth = 4096*8;
+	//const int texHeight = 2048*8;
+	const int texWidth = 1024*8;
+	const int texHeight = 1024*8;
+	const int blockWidth = 1024;
+	const int blockHeight = 1024;
+	const float coreRange = 0.3f;
+	const float softRange = 1.0f;
+	const float forceMax = 1000.0f;
+
+	PxU64 startTime = SnippetUtils::getCurrentTimeCounterValue();
+
+	const float xStep = (maxX - minX + 2.0f) / texWidth;
+	const float zStep = (maxZ - minZ + 2.0f) / texHeight;
+	const float xBegin = minX - 1.0f;
+	const float zBegin = minZ - 1.0f;
+
+	FILE* fp = fopen(file, "w");
+	if (!fp) return;
+	fprintf(fp, "%f %f %f %f %d %d\n", xBegin, xStep, zBegin, zStep, texWidth, texHeight);
+
+	const int threadCount = 16;
+	std::thread t[threadCount];
+	volatile int count[threadCount];
+	for (int ti = 0; ti < threadCount; ti++)
+	{
+		t[ti] = std::thread([=, &count] {
+			std::vector<std::string> results;
+			int blockIndex = 0;
+			count[ti] = 0;
+			for (int xMin = 0, xMax = blockWidth; xMin < texWidth; xMin += blockWidth, xMax += blockWidth)
+			{
+				for (int zMin = 0, zMax = blockHeight; zMin < texHeight; zMin += blockHeight, zMax += blockHeight)
+				{
+					if ((blockIndex++ % threadCount) != ti) continue;
+					count[ti]++;
+					for (int x = xMin; x < texWidth && x < xMax; x++)
+					{
+						for (int z = zMin; z < texHeight && z < zMax; z++)
+						{
+							PxVec3 rayFrom(xBegin + x * xStep, -10000, zBegin + z * zStep);
+							while (true)
+							{
+								PxVec3 rayDir(0, 1, 0);
+								PxRaycastBuffer rayHit;
+								PxQueryFilterData rayFilterData;
+								rayFilterData.data.word0 = 1;
+								if (!gScene->raycast(rayFrom, rayDir, 20000, rayHit, PxHitFlags(PxHitFlag::eDEFAULT), rayFilterData))
+								{
+									break;
+								}
+								if (!rayHit.hasBlock) throw 1; //FIXME:
+
+								PxVec3 from = rayHit.block.position;
+								PxVec3 force(0.0f);
+								for (int i = 0; i < 36; i++)
+								{
+									PxQuat qStep(i * 10.0f / 180.0f * 3.14159f, PxVec3(0, 1, 0));
+									PxVec3 dir(0, 0, 1);
+									dir = qStep.rotate(dir);
+									PxRaycastBuffer hit;
+									PxQueryFilterData filterData;
+									filterData.data.word0 = 2;
+									if (gScene->raycast(from, dir, 1.1f, hit, PxHitFlags(PxHitFlag::eDEFAULT), filterData))
+									{
+										if (!hit.hasBlock) throw 2; //FIXME:
+										PxVec3 f = from;
+										f -= hit.block.position;
+										f.y = 0.0f;
+										float m = f.normalize();
+										m = (m - coreRange) / (softRange - coreRange);
+										if (m < 0.001f)
+										{
+											m = 0.001f;
+										}
+										else if (m > 0.999f)
+										{
+											m = 0.999f;
+										}
+										float factor = 1 / m - 1;
+										force += f * factor;
+									}
+								}
+								float mag = force.normalize();
+								if (mag > 0.01f) //FIXME:
+								{
+									if (mag > forceMax) mag = forceMax;
+									force *= mag;
+									char buf[200];
+									sprintf(buf, "%d %d %0.2f %0.2f %0.2f", x, z, from.y, force.x, force.z);
+									results.push_back(buf);
+									if (results.size() > 1000)
+									{
+										//lock and output
+										std::lock_guard<std::mutex> lock(output_mutex);
+										for (auto o : results)
+										{
+											fprintf(fp, "%s\n", o.c_str());
+										}
+										results.clear();
+									}
+								}
+								rayFrom.y = from.y + 1;
+							}
+						}
+					}
+				}
+			}
+			if (results.size() > 0)
+			{
+				//lock and output
+				std::lock_guard<std::mutex> lock(output_mutex);
+				for (auto o : results)
+				{
+					fprintf(fp, "%s\n", o.c_str());
+				}
+				results.clear();
+			}
+		});
+	}
+	for (int ti = 0; ti < threadCount; ti++)
+	{
+		t[ti].join();
+	}
+
+#if 0
+	for (int i = 0; i < threadCount; i++)
+	{
+		fprintf(fp, "%d %d\n", i, count[i]);
+	}
+#endif
+	fclose(fp);
+
+	PxU64 stopTime = SnippetUtils::getCurrentTimeCounterValue();
+	float elapsedTime = SnippetUtils::getElapsedTimeInMilliseconds(stopTime - startTime);
+	printf("#Elapsed time in ms: %f \n", double(elapsedTime));
+}
+
 int snippetMain(int, const char*const*)
 {	
 	static const PxU32 frameCount = 100;
 	initPhysics();
 
 	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.test.obj");
-	loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.mainland.obj");
+	loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.mainland.floor.obj", 0);
+	loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.mainland.wall.obj", 1);
 	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.demo.obj");
 
 	for(PxU32 i=0; i<frameCount; i++)
@@ -519,7 +666,7 @@ int snippetMain(int, const char*const*)
 
 	//bake("d:\\ForceFields\\forcefields.txt");
 	//bake("D:\\Scene_\\Public\\scene\\windows\\forcefields.test.txt");
-	bake("D:\\Scene_\\Public\\scene\\windows\\forcefields.mainland.txt");
+	bake2("D:\\Scene_\\Public\\scene\\windows\\forcefields.mainland.txt");
 	//bake("D:\\Scene_\\Public\\scene\\windows\\forcefields.demo.txt");
 
 	for(PxU32 i=0; i<frameCount; i++)
