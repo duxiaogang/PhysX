@@ -513,10 +513,10 @@ void bake(const char *file)
 std::mutex output_mutex;
 void bake2(const char *file)
 {
-	//const int texWidth = 4096*8;
-	//const int texHeight = 2048*8;
-	const int texWidth = 1024*8;
-	const int texHeight = 1024*8;
+	const int texWidth = 4096*8;
+	const int texHeight = 4096*8;
+	//const int texWidth = 1024*8;
+	//const int texHeight = 1024*8;
 	const int blockWidth = 1024;
 	const int blockHeight = 1024;
 	const float coreRange = 0.3f;
@@ -657,17 +657,20 @@ int snippetMain(int, const char*const*)
 	initPhysics();
 
 	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.test.obj");
-	loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.mainland.floor.obj", 0);
-	loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.mainland.wall.obj", 1);
 	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.demo.obj");
+	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.mainland.floor.obj", 0);
+	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.mainland.wall.obj", 1);
+	loadMesh("D:/work/gitlab/export_scene_data_for_server/windows/ForceFields/data/mainland/navmesh_scene.floor.obj", 0);
+	loadMesh("D:/work/gitlab/export_scene_data_for_server/windows/ForceFields/data/mainland/navmesh_scene.wall.obj", 1);
 
 	for(PxU32 i=0; i<frameCount; i++)
 		stepPhysics();
 
 	//bake("d:\\ForceFields\\forcefields.txt");
 	//bake("D:\\Scene_\\Public\\scene\\windows\\forcefields.test.txt");
-	bake2("D:\\Scene_\\Public\\scene\\windows\\forcefields.mainland.txt");
 	//bake("D:\\Scene_\\Public\\scene\\windows\\forcefields.demo.txt");
+	//bake2("D:\\Scene_\\Public\\scene\\windows\\forcefields.mainland.txt");
+	bake2("D:/work/gitlab/export_scene_data_for_server/windows/ForceFields/data/mainland/forcefields.txt");
 
 	for(PxU32 i=0; i<frameCount; i++)
 		stepPhysics();
