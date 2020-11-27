@@ -513,10 +513,17 @@ void bake(const char *file)
 std::mutex output_mutex;
 void bake2(const char *file)
 {
-	const int texWidth = 4096*8;
-	const int texHeight = 4096*8;
+	//const int texWidth = 4096*8;
+	//const int texHeight = 4096*8;
 	//const int texWidth = 1024*8;
 	//const int texHeight = 1024*8;
+	int w = int(maxX - minX);
+	w = (w + 1023) / 1024 * 1024;
+	int texWidth = w * 8;
+	int h = int(maxZ - minZ);
+	h = (h + 1023) / 1024 * 1024;
+	int texHeight = h * 8;
+
 	const int blockWidth = 1024;
 	const int blockHeight = 1024;
 	const float coreRange = 0.3f;
