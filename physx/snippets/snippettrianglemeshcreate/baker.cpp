@@ -668,6 +668,12 @@ int snippetMain(int, const char*const*)
 	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.mainland.floor.obj", 0);
 	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.mainland.wall.obj", 1);
 	loadMesh("D:/work/gitlab/export_scene_data_for_server/windows/ForceFields/data/mainland/navmesh_scene.floor.obj", 0);
+
+	//Ô­Ê¼³¡¾°
+	minX = 1000000.0f;
+	maxX = -1000000.0f;
+	minZ = 1000000.0f;
+	maxZ = -1000000.0f;
 	loadMesh("D:/work/gitlab/export_scene_data_for_server/windows/ForceFields/data/mainland/navmesh_scene.wall.obj", 1);
 
 	for(PxU32 i=0; i<frameCount; i++)
