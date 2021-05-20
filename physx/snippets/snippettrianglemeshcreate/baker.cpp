@@ -658,23 +658,36 @@ void bake2(const char *file)
 	printf("#Elapsed time in ms: %f \n", double(elapsedTime));
 }
 
-int snippetMain(int, const char*const*)
+int snippetMain(int argc, const char*const* argv)
 {	
 	static const PxU32 frameCount = 100;
+
+	if (argc < 4)
+	{
+		fprintf(stderr, "usage:\n\t%s input.floor.obj input.wall.obj output", argv[0]);
+		return -1;
+	}
+
+	const char* floorObj = argv[1];
+	const char* wallObj = argv[2];
+	const char* output = argv[3];
+
 	initPhysics();
 
 	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.test.obj");
 	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.demo.obj");
 	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.mainland.floor.obj", 0);
 	//loadMesh("D:\\Scene_\\Public\\scene\\windows\\navmesh_scene.mainland.wall.obj", 1);
-	loadMesh("D:/work/gitlab/export_scene_data_for_server/windows/ForceFields/data/mainland/navmesh_scene.floor.obj", 0);
+	//loadMesh("D:/work/gitlab/export_scene_data_for_server/windows/ForceFields/data/mainland/navmesh_scene.floor.obj", 0);
+	loadMesh(floorObj, 0);
 
 	//Ô­Ê¼³¡¾°
 	minX = 1000000.0f;
 	maxX = -1000000.0f;
 	minZ = 1000000.0f;
 	maxZ = -1000000.0f;
-	loadMesh("D:/work/gitlab/export_scene_data_for_server/windows/ForceFields/data/mainland/navmesh_scene.wall.obj", 1);
+	//loadMesh("D:/work/gitlab/export_scene_data_for_server/windows/ForceFields/data/mainland/navmesh_scene.wall.obj", 1);
+	loadMesh(wallObj, 1);
 
 	for(PxU32 i=0; i<frameCount; i++)
 		stepPhysics();
@@ -683,7 +696,8 @@ int snippetMain(int, const char*const*)
 	//bake("D:\\Scene_\\Public\\scene\\windows\\forcefields.test.txt");
 	//bake("D:\\Scene_\\Public\\scene\\windows\\forcefields.demo.txt");
 	//bake2("D:\\Scene_\\Public\\scene\\windows\\forcefields.mainland.txt");
-	bake2("D:/work/gitlab/export_scene_data_for_server/windows/ForceFields/data/mainland/forcefields.txt");
+	//bake2("D:/work/gitlab/export_scene_data_for_server/windows/ForceFields/data/mainland/forcefields.txt");
+	bake2(output);
 
 	for(PxU32 i=0; i<frameCount; i++)
 		stepPhysics();
